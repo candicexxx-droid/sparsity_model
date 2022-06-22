@@ -36,7 +36,9 @@ class DatasetFromFile(Dataset):
                 examples.append(line)
         x = torch.LongTensor(examples)
         self.x = x
-        self.k = x.sum(dim=1).max()
+        self.info={}
+        self.info['k'] = x.sum(dim=1).max()
+        self.info['n'] = self.x[0].shape[0]
 
     def __getitem__(self, index):
         return self.x[index]
@@ -48,7 +50,7 @@ class DatasetFromFile(Dataset):
         print('============================================================================')
         print('%s size is %d'%(self.mode,len(self.x)) )
         print('shape of one obersvation:', self.x[0].shape[0])
-        print('largest number of non zero entries in a single observation:', self.k.item())
+        print('largest number of non zero entries in a single observation:', self.info['k'].item())
         print('============================================================================')
 
 if __name__ == "__main__":
