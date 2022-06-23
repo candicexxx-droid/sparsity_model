@@ -34,10 +34,10 @@ class DatasetFromFile(Dataset):
                     continue
                 line = [int(x) for x in line.split(',')]
                 examples.append(line)
-        x = torch.LongTensor(examples)
+        x = torch.tensor(examples,dtype=torch.long)
         self.x = x
         self.info={}
-        self.info['k'] = x.sum(dim=1).max()
+        self.info['k'] = int(x.sum(dim=1).max())
         self.info['n'] = self.x[0].shape[0]
 
     def __getitem__(self, index):
