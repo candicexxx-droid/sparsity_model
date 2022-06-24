@@ -2,6 +2,8 @@ import argparse
 from fileinput import filename
 import sys
 import os
+from random import randint
+import datetime
 
 import torch
 import torch.nn as nn
@@ -12,9 +14,37 @@ import numpy.linalg as la
 
 def parse_args():
     parser = argparse.ArgumentParser("train")
-    parser.add_argument('-data', type=str, default='nips', help='specify dataset')
+    parser.add_argument('-data', type=str, default='tiny', help='specify dataset')
+    parser.add_argument('-batch_size', type=int, default=32, help='batch size')
+    parser.add_argument('-epoch', default=50, type=int, help='epoch#')
+    #optimizer
+    parser.add_argument('-optimizer', type=str, default='Adam', help='Adam or SGD')
+    parser.add_argument('-lr', default=0.001, type=float)
+    parser.add_argument('-weight_d', default=0, type=float)
+    parser.add_argument('-momentum', default=0.9, type=float, help='momentum for SGD')
+
+
+
+
+    parser.add_argument('-model', type=str, default='LEnsemble', help='specify model name (same as class name in model.py')
+    parser.add_argument('-output_folder', type=str, default="", help='log path')
+    parser.add_argument('-output_dir', type=str, default="", help='log path')
     return parser.parse_args()
 
+def process_opt(opt):
+    rand_id='id'+str(randint(0,9))
+    if opt.output_folder:
+        check_folder=os.path.join("log",opt.output_folder)
+        if not os.path.isdir(check_folder):
+            os.mkdir(check_folder)
+            print('new folder %s created!'%check_folder)
+            
+    opt.output_dir= '_' + opt.output_dir if opt.output_dir else opt.output_dir
+    opt.output_dir = datetime.datetime.now().strftime('%b%d_%H-%M-%S')+'_' +rand_id+opt.output_dir
+
+    opt.output_dir = os.path.join("log", opt.output_folder, opt.output_dir)
+    
+    print ("log will be saved at %s" % opt.output_dir)
 
 
 

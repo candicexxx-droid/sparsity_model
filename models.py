@@ -17,15 +17,15 @@ class sumNode(nn.Module):
         """
         x should be in size num_child x 1
         """
-        if not self.leaf:
+        if not self.leaf: #if sum node is not leaf
             out = []
             for i in self.children:
-                out.append(i(x))
+                out.append(i(x)) #summ all outputs of children  together 
             out = torch.cat(out,dim=1)
             
-        else:
-            #'leaf sum node'
-            
+        else: #'leaf sum node'
+            #+
+            #x_1,...,x_n (in PGC form) -> computed in PC version            
             out=[]
             l = len(self.children)
             
@@ -69,7 +69,8 @@ class inputNode(nn.Module):
 class naivePC(nn.Module):
     def __init__(self, info) -> None:
         '''
-        info: k and ob_l from data 
+        info: k and ob_l from data
+        model probability distribution of exact k nonzero terms (time complexity is too large)
         '''
         super().__init__()
         self.info=info #get n and k 
@@ -113,7 +114,11 @@ class naivePC(nn.Module):
         return self.root(x)
 
 
-class LEsemble(nn.Module):
+class LEnsemble(nn.Module):
+    """
+    adapted from https://github.com/joshuacnf/Probabilistic-Generating-Circuits/blob/18700951ad18759e95ca85430da66042931b6c8b/pgc
+    """
+
     def __init__(self, data_info) -> None:
         super().__init__()
         n = data_info['n']
@@ -139,12 +144,56 @@ class LEsemble(nn.Module):
         for i in x:
             idx = (i==1)
             L_y = L[idx,:][:,idx]
-            out = log_norm-torch.logdet(L_y) #negative log likelihood
+            out = torch.logdet(L_y)-log_norm # log likelihood
             outputs.append(out)
         outputs = torch.stack(outputs)
         return outputs
 
-        pass
+class compElemDPP(nn.Module):
+    def __init__(self, data_info) -> None:
+        super().__init__()
+        self.n = data_info['n']
+        self.k = data_info['k']
+        B = torch.rand(self.n, self.n)
+        # B_norm = torch.norm(B, dim=0)
+        # for i in range(0, self.n):
+        #     B[:,i] /= B_norm[i]#make B orthonormal
+        self.B = nn.Parameter(B, requires_grad=True)
+        self.I = torch.eye(self.n)
+
+    def forward(self,x):
+        # eps = 1e-8
+        L = torch.matmul(self.B.transpose(0,1),self.B)
+        _, V = torch.linalg.eigh(L)
+        
+
+
+        L_ens = []
+        for i in range(1, self.k+1):
+            K_i = torch.matmul(V[:,:i], V[:,:i].transpose(1,0))
+            L_i = torch.matmul(K_i,torch.linalg.inv(self.I-K_i)) #entries of L_i explodes here because entries of K_i is very small 
+            L_ens.append(L_i)
+        
+        L_ens = torch.stack(L_ens)
+        # k = x.sum(dim=1) #compute number of nonzero terms for each example in a batch
+        # k = k-1 #make it zero-index
+        # L_ens_x = L_ens[k] 
+        outputs = []
+        for i in x:
+            idx = (i==1)
+            k = i.sum().item()-1 ##compute number of nonzero terms for each example in a batch, make it zero-indexed
+            L_k = L_ens[k]
+            L_y = L_k[idx,:][:,idx]
+            log_norm = torch.logdet(L_k+self.I)
+            out = torch.logdet(L_y)-log_norm # log likelihood
+            outputs.append(out)
+        outputs = torch.stack(outputs)
+        return outputs #output log likelihood for each example
+
+
+
+            
+
 
 
 
@@ -163,7 +212,8 @@ if __name__=="__main__":
     # start_time = time()
     # model=naivePC(train_data.info) #model construction time too long
     # end_time = time()
-    model = LEsemble(train_data.info)
+    # model = LEnsemble(train_data.info)
+    model = compElemDPP(train_data.info)
 
     # print('time elapsed for model building: %d' %(end_time-start_time))
 
