@@ -3,14 +3,16 @@ import torch
 import torch.nn as nn
 
 
+
 #see how to pass children's result to parent
 class sumNode(nn.Module):
     def __init__(self, parent, children, leaf=False) -> None:
         super().__init__()
-        num_child = len(children) if type(self.children) is not int else children
+        self._children = children #list
+        num_child = len(children) if type(self._children) is not int else children
         self.W = nn.Parameter(torch.rand(num_child,1), requires_grad=True)
         self.parent = parent #single node 
-        self.children = children #list
+        
         self.val = None
         self.leaf=leaf
     def forward(self,x=None):
@@ -19,7 +21,7 @@ class sumNode(nn.Module):
         """
         if not self.leaf: #if sum node is not leaf
             out = []
-            for i in self.children:
+            for i in self._children:
                 out.append(i(x)) #summ all outputs of children  together 
             out = torch.cat(out,dim=1)
             
@@ -27,7 +29,7 @@ class sumNode(nn.Module):
             #+
             #x_1,...,x_n (in PGC form) -> computed in PC version            
             out=[]
-            l = len(self.children)
+            l = len(self._children)
             
             for i in range(l):
                 temp = (x^True)[:,:l]
@@ -36,7 +38,8 @@ class sumNode(nn.Module):
                 out.append(x[:,i]*torch.prod(temp,dim=1))
 
             out = torch.stack(out,dim=1)
-        out = torch.matmul(out.to(torch.float),self.W)
+        W = nn.functional.softmax(self.W.transpose(1,0)).transpose(1,0)
+        out = torch.matmul(out.to(torch.float),W)
         
         return out 
 
@@ -44,12 +47,12 @@ class prodNode(nn.Module):
     def __init__(self, parent, children) -> None:
         super().__init__()
         self.parent = parent #single node 
-        self.children = children #list or index to input 
+        self._children = children #list or index to input 
         self.val = None
     def forward(self,x=None):
         
         out = []
-        for i in self.children:
+        for i in self._children:
             out.append(i(x))
         # out = torch.as_tensor(out)
         out = torch.cat(out,dim=1)
@@ -122,11 +125,12 @@ class LEnsemble(nn.Module):
     def __init__(self, data_info) -> None:
         super().__init__()
         n = data_info['n']
-        B = torch.randn(n, n)
+        k = data_info['k']
+        B = torch.randn(n, data_info['k'])
         B_norm = torch.norm(B, dim=0)
-        for i in range(0, n):
-            B[:,i] /= B_norm[i]
-        self.B = nn.Parameter(B, requires_grad=True)
+        # for i in range(0, k):
+        #     B[:,i] /= B_norm[i]
+        self.B = nn.Parameter(B, requires_grad=True) #n *k 
         self.I = torch.eye(n)
 
         
@@ -134,7 +138,7 @@ class LEnsemble(nn.Module):
     def forward(self,x): #output log likelihood
         #x.shape = B, n
         eps = 1e-8
-        L = torch.matmul(self.B.transpose(0,1),self.B) + eps*self.I
+        L = torch.matmul(self.B,self.B.transpose(1,0)) + eps*self.I
         # L = self.L.unsqueeze(0).repeat(x.shape[0],1,1)
 
         # norm = torch.det(L+self.I) #results in inf?
@@ -162,14 +166,18 @@ class compElemDPP(nn.Module):
         self.I = torch.eye(self.n)
 
     def forward(self,x):
-        # eps = 1e-8
+
         L = torch.matmul(self.B.transpose(0,1),self.B)
         _, V = torch.linalg.eigh(L)
+        V_norm = torch.norm(V, dim=0)
+        for i in range(0, self.n):
+            V[:,i] /= V_norm[i]#make V orthonormal
         
 
 
         L_ens = []
         for i in range(1, self.k+1):
+            #construct marginal kernels for elementary DPP 
             K_i = torch.matmul(V[:,:i], V[:,:i].transpose(1,0))
             L_i = torch.matmul(K_i,torch.linalg.inv(self.I-K_i)) #entries of L_i explodes here because entries of K_i is very small 
             L_ens.append(L_i)
@@ -190,6 +198,37 @@ class compElemDPP(nn.Module):
         outputs = torch.stack(outputs)
         return outputs #output log likelihood for each example
 
+class arrayPC(nn.Module):
+    def __init__(self, data_info)-> None:
+        super().__init__()
+        self.n, self.k = data_info['n'],(data_info['k']+1)
+        self.W = nn.Parameter(torch.randn(self.n-1,self.k-1,2), requires_grad=True)
+        self.endW = nn.Parameter(torch.randn(self.k,1), requires_grad=True)
+        # self.F = torch.zeros()
+    def forward(self, x):
+         #x.shape = B, n
+        F = torch.zeros(x.shape[0], self.n, self.k)
+        # base case
+        F[:,:,0] = 1 
+        F[:,0,1] = x[:,0] #x_1
+        for i in range(0,self.n):
+            for j in range (0, i+1):
+                F[:,i,0] *= x[:,j]^True
+        # print('base case done')
+        for i in range(1, self.n):
+            W = nn.functional.softmax(self.W[i-1],dim=1) #shape self.k-1, 2
+            F[:,i,1:] = x[:,i].unsqueeze(1)*W[:,0]*F[:,i-1,:self.k-1].clone() + W[:,1]*F[:,i-1,1:].clone() #
+            # F[:,i,1:] += 
+            # print('done')
+            # #x[:,i].shape = B,1
+            pass 
+
+
+        out = torch.matmul(F[:,-1,:],nn.functional.softmax(self.endW,dim=1))
+        out = torch.log(out)
+        return out
+
+
 
 
             
@@ -201,19 +240,20 @@ class compElemDPP(nn.Module):
 if __name__=="__main__":
     from utils import *
     from torch.utils.data import DataLoader
-
+    import models
     from time import time
 
     
     opt=parse_args()
-    train_data=DatasetFromFile('nips')
+    train_data=DatasetFromFile('sanity_check')
     train_dl = DataLoader(train_data, batch_size=4)
-
+    # train_data.info['k']=1
     # start_time = time()
     # model=naivePC(train_data.info) #model construction time too long
+    model = getattr(models, opt.model)(train_data.info)
     # end_time = time()
     # model = LEnsemble(train_data.info)
-    model = compElemDPP(train_data.info)
+    # model = compElemDPP(train_data.info)
 
     # print('time elapsed for model building: %d' %(end_time-start_time))
 

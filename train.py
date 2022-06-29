@@ -4,6 +4,7 @@ import torch.optim as optim
 from torch.utils.tensorboard import SummaryWriter
 
 from tqdm import tqdm
+import json
 
 
 def nll(y):
@@ -18,6 +19,7 @@ def avg_ll(model, dataset_loader):
     """
     lls = []
     dataset_len = 0
+    model.eval()
     for x_batch in dataset_loader:
         # x_batch = x_batch.to(device)
         y_batch = model(x_batch)
@@ -38,33 +40,38 @@ def main(opt):
     
     hyperparam=vars(opt)
     hyperparam_file = open(opt.output_dir+"/hyperparam.json","w")
+    json.dump(hyperparam, hyperparam_file)
+    hyperparam_file.close()
 
-    for epoch in range(1, opt.epoch + 1):
 
-        model.train()
-        losses=[]
-        for x_batch in tqdm(train_dl,leave=True):
-            # x_batch = x_batch.to(device)
-            y_batch = model(x_batch)
-            loss = nll(y_batch)
-            losses.append(loss)
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
+    with torch.autograd.set_detect_anomaly(True):
+        for epoch in range(1, opt.epoch + 1):
+
+            model.train()
+            losses=[]
+            for x_batch in tqdm(train_dl,leave=True):
+                # x_batch = x_batch.to(device)
+                y_batch = model(x_batch)
+                loss = nll(y_batch)
+                losses.append(loss)
+                optimizer.zero_grad()
+                # loss.backward(inputs=list(model.parameters()))
+                loss.backward()
+                optimizer.step()
+                
+
+            #logging performance/testing  
             
+            avg_loss = sum(losses)/len(losses) #avg loss for each epoch
+            print('Dataset {}; Epoch {}, Batch avg Loss: {}'.format(opt.data, epoch, avg_loss))
+            tb_writer.add_scalar("%s/avg_loss"%"train", avg_loss, epoch)
+            # compute likelihood on train, valid and test
+            train_ll = avg_ll(model, train_dl)
+            valid_ll = avg_ll(model, valid_dl)
+            # test_ll = avg_ll(model, test_dl)
 
-        #logging performance/testing  
-        
-        avg_loss = sum(losses)/len(losses) #avg loss for each epoch
-        print('Dataset {}; Epoch {}, Batch avg Loss: {}'.format(opt.data, epoch, avg_loss))
-        tb_writer.add_scalar("%s/avg_loss"%"train", avg_loss, epoch)
-        # compute likelihood on train, valid and test
-        train_ll = avg_ll(model, train_dl)
-        valid_ll = avg_ll(model, valid_dl)
-        # test_ll = avg_ll(model, test_dl)
-
-        tb_writer.add_scalar("%s/avg_ll"%"train", train_ll, epoch)
-        tb_writer.add_scalar("%s/avg_ll"%"valid", train_ll, epoch)
+            tb_writer.add_scalar("%s/avg_ll"%"train", train_ll, epoch)
+            tb_writer.add_scalar("%s/avg_ll"%"valid", valid_ll, epoch)
         # tb_writer.add_scalar("%s/avg_ll"%"test", train_ll, epoch)
     
     #save at the end of the epoch
@@ -80,7 +87,11 @@ def main(opt):
 
 
 if __name__=="__main__":
+    from sanity_check_gen import *
     opt = parse_args()
     process_opt(opt)
+    if len(opt.sanity_check) !=0:
+        sanity_check_param = [int(i) for i in opt.sanity_check.split(',')]
+        sanity_check_gen(sanity_check_param[0],sanity_check_param[1]) #generate sanity check data 
     main(opt)
     print('done')
