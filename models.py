@@ -137,8 +137,9 @@ class LEnsemble(nn.Module):
 
     def forward(self,x): #output log likelihood
         #x.shape = B, n
-        eps = 1e-8
-        L = torch.matmul(self.B,self.B.transpose(1,0)) + eps*self.I
+        eps = 1e-8 #soften the k-constraints
+        L = torch.matmul(self.B,self.B.transpose(1,0)) 
+        # + eps*self.I
         # L = self.L.unsqueeze(0).repeat(x.shape[0],1,1)
 
         # norm = torch.det(L+self.I) #results in inf?
@@ -203,31 +204,37 @@ class arrayPC(nn.Module):
         super().__init__()
         self.n, self.k = data_info['n'],(data_info['k']+1)
         self.W = nn.Parameter(torch.randn(self.n-1,self.k-1,2), requires_grad=True)
-        self.endW = nn.Parameter(torch.randn(self.k,1), requires_grad=True)
+        self.endW = nn.Parameter(torch.randn(1,self.k), requires_grad=True)
         # self.F = torch.zeros()
     def forward(self, x):
          #x.shape = B, n
-        F = torch.zeros(x.shape[0], self.n, self.k)
+        F = torch.log(torch.zeros(x.shape[0], self.n, self.k))
         # base case
-        F[:,:,0] = 1 
-        F[:,0,1] = x[:,0] #x_1
+        F[:,:,0] = 1
+        F[:,0,1] = torch.log(x[:,0]) #x_1
         for i in range(0,self.n):
             for j in range (0, i+1):
                 F[:,i,0] *= x[:,j]^True
         # print('base case done')
+        F[:,:,0]=torch.log(F[:,:,0])
+
         for i in range(1, self.n):
-            W = nn.functional.softmax(self.W[i-1],dim=1) #shape self.k-1, 2
-            F[:,i,1:] = x[:,i].unsqueeze(1)*W[:,0]*F[:,i-1,:self.k-1].clone() + W[:,1]*F[:,i-1,1:].clone() #
+            W = torch.log(nn.functional.softmax(self.W[i-1],dim=1)) #shape self.k-1, 2
+
+            prior = torch.stack([F[:,i-1,:self.k-1].clone(), F[:,i-1,1:].clone()],dim=2) #shape B, self.k-1, 2
+            
+            F[:,i,1:] = torch.logsumexp(W+prior,dim=2)
+            print(' ')
             # F[:,i,1:] += 
             # print('done')
             # #x[:,i].shape = B,1
             pass 
 
-
-        out = torch.matmul(F[:,-1,:],nn.functional.softmax(self.endW,dim=1))
-        out = torch.log(out)
+        endW = nn.functional.softmax(self.endW,dim=1)
+        # out = torch.matmul(F[:,-1,:],)
+        out = torch.logsumexp(endW+F[:,-1,:],dim=1)
+        # out = torch.log(out)
         return out
-
 
 
 
@@ -246,8 +253,8 @@ if __name__=="__main__":
     
     opt=parse_args()
     train_data=DatasetFromFile('sanity_check')
-    train_dl = DataLoader(train_data, batch_size=4)
-    # train_data.info['k']=1
+    train_dl = DataLoader(train_data, batch_size=5)
+    # train_data.info['k']=2
     # start_time = time()
     # model=naivePC(train_data.info) #model construction time too long
     model = getattr(models, opt.model)(train_data.info)

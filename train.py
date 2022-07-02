@@ -49,11 +49,13 @@ def main(opt):
 
             model.train()
             losses=[]
+            num_items = []
             for x_batch in tqdm(train_dl,leave=True):
                 # x_batch = x_batch.to(device)
                 y_batch = model(x_batch)
                 loss = nll(y_batch)
                 losses.append(loss)
+                num_items.append(x_batch.shape[0])
                 optimizer.zero_grad()
                 # loss.backward(inputs=list(model.parameters()))
                 loss.backward()
@@ -62,8 +64,9 @@ def main(opt):
 
             #logging performance/testing  
             
-            avg_loss = sum(losses)/len(losses) #avg loss for each epoch
-            print('Dataset {}; Epoch {}, Batch avg Loss: {}'.format(opt.data, epoch, avg_loss))
+            # avg_loss = sum(losses)/len(losses) #avg loss for each epoch
+            avg_loss = sum(losses)/sum(num_items) #avg loss for example
+            print('Dataset {}; Epoch {}, avg Loss per example: {}'.format(opt.data, epoch, avg_loss))
             tb_writer.add_scalar("%s/avg_loss"%"train", avg_loss, epoch)
             # compute likelihood on train, valid and test
             train_ll = avg_ll(model, train_dl)
