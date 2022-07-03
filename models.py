@@ -209,15 +209,18 @@ class arrayPC(nn.Module):
         # self.F = torch.zeros()
     def forward(self, x):
          #x.shape = B, n
-        F = torch.log(torch.zeros(x.shape[0], self.n, self.k))
+        # F = torch.log(torch.zeros(x.shape[0], self.n, self.k))
+        F = torch.zeros(x.shape[0], self.n, self.k)
         # base case
         F[:,:,0] = 1
-        F[:,0,1] = torch.log(x[:,0]) #x_1
+        F[:,0,1] = x[:,0] #x_1
         for i in range(0,self.n):
             for j in range (0, i+1):
                 F[:,i,0] *= x[:,j]^True
         # print('base case done')
-        F[:,:,0]=torch.log(F[:,:,0])
+        # F[:,:,0]=torch.log(F[:,:,0])
+        F = torch.log(F)
+
 
         for i in range(1, self.n):
             W = torch.log(nn.functional.softmax(self.W[i-1],dim=1)) #shape self.k-1, 2
