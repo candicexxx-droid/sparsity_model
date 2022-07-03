@@ -203,6 +203,7 @@ class arrayPC(nn.Module):
     def __init__(self, data_info)-> None:
         super().__init__()
         self.n, self.k = data_info['n'],(data_info['k']+1)
+        torch.manual_seed(10)
         self.W = nn.Parameter(torch.randn(self.n-1,self.k-1,2), requires_grad=True)
         self.endW = nn.Parameter(torch.randn(1,self.k), requires_grad=True)
         # self.F = torch.zeros()
@@ -222,7 +223,7 @@ class arrayPC(nn.Module):
             W = torch.log(nn.functional.softmax(self.W[i-1],dim=1)) #shape self.k-1, 2
 
             prior = torch.stack([F[:,i-1,:self.k-1].clone(), F[:,i-1,1:].clone()],dim=2) #shape B, self.k-1, 2
-            
+            prior[:,:,0] +=torch.log(x[:,i].unsqueeze(1))
             F[:,i,1:] = torch.logsumexp(W+prior,dim=2)
             print(' ')
             # F[:,i,1:] += 
@@ -230,13 +231,42 @@ class arrayPC(nn.Module):
             # #x[:,i].shape = B,1
             pass 
 
-        endW = nn.functional.softmax(self.endW,dim=1)
+        endW = torch.log(nn.functional.softmax(self.endW,dim=1))
         # out = torch.matmul(F[:,-1,:],)
         out = torch.logsumexp(endW+F[:,-1,:],dim=1)
         # out = torch.log(out)
         return out
 
+class arrayPC_naive(arrayPC):
+    def __init__(self, data_info)-> None:
+        super().__init__(data_info)
+        # self.n, self.k = data_info['n'],(data_info['k']+1)
+        # self.W = nn.Parameter(torch.randn(self.n-1,self.k-1,2), requires_grad=True)
+        # self.endW = self.endW.transpose(1,0)
+        # self.F = torch.zeros()
+    def forward(self, x):
+         #x.shape = B, n
+        F = torch.zeros(x.shape[0], self.n, self.k)
+        # base case
+        F[:,:,0] = 1 
+        F[:,0,1] = x[:,0] #x_1
+        for i in range(0,self.n):
+            for j in range (0, i+1):
+                F[:,i,0] *= x[:,j]^True
+        # print('base case done')
+        for i in range(1, self.n):
+            W = nn.functional.softmax(self.W[i-1],dim=1) #shape self.k-1, 2
+            F[:,i,1:] = x[:,i].unsqueeze(1)*W[:,0]*F[:,i-1,:self.k-1].clone() + W[:,1]*F[:,i-1,1:].clone() #
+            # F[:,i,1:] += 
+            # print('done')
+            # #x[:,i].shape = B,1
+            pass 
 
+        self.endW.data = self.endW.data.transpose(1,0)
+        endW = nn.functional.softmax(self.endW,dim=0)
+        out = torch.matmul(F[:,-1,:],endW)
+        out = torch.log(out)
+        return out
 
             
 
