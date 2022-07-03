@@ -219,14 +219,20 @@ class arrayPC(nn.Module):
                 F[:,i,0] *= x[:,j]^True
         # print('base case done')
         # F[:,:,0]=torch.log(F[:,:,0])
+        p_inf = torch.tensor(-float('inf'))
         F = torch.log(F)
+        F[F.isinf()]= p_inf
 
 
         for i in range(1, self.n):
             W = torch.log(nn.functional.softmax(self.W[i-1],dim=1)) #shape self.k-1, 2
 
             prior = torch.stack([F[:,i-1,:self.k-1].clone(), F[:,i-1,1:].clone()],dim=2) #shape B, self.k-1, 2
-            prior[:,:,0] +=torch.log(x[:,i].unsqueeze(1))
+            
+            log_x_part = torch.log(x[:,i].unsqueeze(1))
+            log_x_part[log_x_part.isinf()]= p_inf
+
+            prior[:,:,0] += log_x_part
             F[:,i,1:] = torch.logsumexp(W+prior,dim=2)
             print(' ')
             # F[:,i,1:] += 
