@@ -221,10 +221,10 @@ class arrayPC(nn.Module):
                 F[:,i,0] *= x[:,j]^True
         # print('base case done')
         # F[:,:,0]=torch.log(F[:,:,0])
-        # p_inf = torch.tensor(-float('inf'))
-        p_inf = -10**(10)
+        p_inf = torch.tensor(-float('inf'))
+        # p_inf = -10**(10)
         F = torch.log(F)
-        F[F.isinf()]= p_inf
+        F[F.isinf()]= 1
 
 
         for i in range(1, self.n):
@@ -245,7 +245,10 @@ class arrayPC(nn.Module):
 
         endW = torch.log(nn.functional.softmax(self.endW,dim=1))
         # out = torch.matmul(F[:,-1,:],)
-        out = torch.logsumexp(endW+F[:,-1,:],dim=1)
+        non_inf = ~F[:,-1,:].isinf()
+        endW = endW.repeat(x.shape[0],1)[non_inf]
+        # out = torch.logsumexp(endW+F[:,-1,:][non_inf],dim=0)
+        out = endW+F[:,-1,:][non_inf]
         # out = torch.log(out)
         return out
 

@@ -4,3 +4,4 @@ log/
 __pycache__/
 train_scripts/
 sanity_check_gen.py
+test.py

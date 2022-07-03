@@ -75,13 +75,13 @@ def main(opt):
             print('Dataset {}; Epoch {}, avg Loss per example: {}'.format(opt.data, epoch, avg_loss))
             tb_writer.add_scalar("%s/avg_loss"%"train", avg_loss, epoch)
             # compute likelihood on train, valid and test
-            # train_ll = avg_ll(model, train_dl,device)
-            # valid_ll = avg_ll(model, valid_dl,device)
-            # # test_ll = avg_ll(model, test_dl)
+            train_ll = avg_ll(model, train_dl,device)
+            valid_ll = avg_ll(model, valid_dl,device)
+            # test_ll = avg_ll(model, test_dl)
 
-            # tb_writer.add_scalar("%s/avg_ll"%"train", train_ll, epoch)
-            # tb_writer.add_scalar("%s/avg_ll"%"valid", valid_ll, epoch)
-        # tb_writer.add_scalar("%s/avg_ll"%"test", train_ll, epoch)
+            tb_writer.add_scalar("%s/avg_ll"%"train", train_ll, epoch)
+            tb_writer.add_scalar("%s/avg_ll"%"valid", valid_ll, epoch)
+        tb_writer.add_scalar("%s/avg_ll"%"test", train_ll, epoch)
     
     #save at the end of the epoch
     torch.save({
