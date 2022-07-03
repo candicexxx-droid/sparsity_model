@@ -219,7 +219,8 @@ class arrayPC(nn.Module):
                 F[:,i,0] *= x[:,j]^True
         # print('base case done')
         # F[:,:,0]=torch.log(F[:,:,0])
-        p_inf = torch.tensor(-float('inf'))
+        # p_inf = torch.tensor(-float('inf'))
+        p_inf = -10**(10)
         F = torch.log(F)
         F[F.isinf()]= p_inf
 
@@ -234,7 +235,7 @@ class arrayPC(nn.Module):
 
             prior[:,:,0] += log_x_part
             F[:,i,1:] = torch.logsumexp(W+prior,dim=2)
-            print(' ')
+            # print(' ')
             # F[:,i,1:] += 
             # print('done')
             # #x[:,i].shape = B,1
