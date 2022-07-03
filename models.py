@@ -211,6 +211,8 @@ class arrayPC(nn.Module):
          #x.shape = B, n
         # F = torch.log(torch.zeros(x.shape[0], self.n, self.k))
         F = torch.zeros(x.shape[0], self.n, self.k)
+        device = x.device
+        F = F.to(device)
         # base case
         F[:,:,0] = 1
         F[:,0,1] = x[:,0] #x_1

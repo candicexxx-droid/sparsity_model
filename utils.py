@@ -17,6 +17,7 @@ def parse_args():
     parser.add_argument('-data', type=str, default='nips', help='specify dataset')
     parser.add_argument('-batch_size', type=int, default=32, help='batch size')
     parser.add_argument('-epoch', default=50, type=int, help='epoch#')
+    parser.add_argument('-cuda', type=int, default=0, help="specify cuda index")
     #optimizer
     parser.add_argument('-optimizer', type=str, default='Adam', help='Adam or SGD')
     parser.add_argument('-lr', default=0.001, type=float)
