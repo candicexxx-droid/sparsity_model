@@ -247,6 +247,12 @@ class arrayPC(nn.Module):
         torch.manual_seed(10)
         self.W = nn.Parameter(torch.randn(self.n-1,self.k-1,2), requires_grad=True)
         self.endW = nn.Parameter(torch.randn(1,self.k), requires_grad=True)
+        self.W_adjust1 = torch.ones(self.W.shape)
+        
+        self.W_adjust2 = torch.zeros(self.W.shape)
+        for i in range(1, self.k-1):
+            self.W_adjust1[i-1][i:,:]= 0
+            self.W_adjust2[:,i,:][0][0] = 1
         # self.F = torch.zeros()
     def forward(self, x):
          #x.shape = B, n
@@ -265,18 +271,31 @@ class arrayPC(nn.Module):
         p_inf = torch.tensor(-float('inf'))
         # p_inf = -10**(10)
         F = torch.log(F)
-        F[F.isinf()]= 1
-
+        F[F.isinf()]= p_inf
+        W = nn.functional.softmax(self.W,dim=2)
+        W_full = W * self.W_adjust1 + self.W_adjust2
 
         for i in range(1, self.n):
-            W = torch.log(nn.functional.softmax(self.W[i-1],dim=1)) #shape self.k-1, 2
+            W = W_full[i-1]#shape self.k-1, 2
 
+            # if i< self.k-1:
+            #     W_adjust1 = torch.zeros(W.shape)
+            #     W_adjust1[:i] = 1
+            #     W_adjust2 = torch.zeros(W.shape)
+            #     W_adjust2[i][0] = 1
+            #     W = W * W_adjust1 + W_adjust2
+            
+            W = torch.log(W)   
             prior = torch.stack([F[:,i-1,:self.k-1].clone(), F[:,i-1,1:].clone()],dim=2) #shape B, self.k-1, 2
             
             log_x_part = torch.log(x[:,i].unsqueeze(1))
             log_x_part[log_x_part.isinf()]= p_inf
 
+            log_x_bar_part = torch.log((x[:,i]^True).unsqueeze(1))
+            log_x_bar_part[log_x_bar_part.isinf()]= p_inf
+
             prior[:,:,0] += log_x_part
+            prior[:,:,1] += log_x_bar_part
             F[:,i,1:] = torch.logsumexp(W+prior,dim=2)
             # print(' ')
             # F[:,i,1:] += 
@@ -307,13 +326,24 @@ class arrayPC_naive(arrayPC):
         # base case
         F[:,:,0] = 1 
         F[:,0,1] = x[:,0] #x_1
+        W = nn.functional.softmax(self.W,dim=2)
+        
+        W_full = W * self.W_adjust1 + self.W_adjust2
+
+
         for i in range(0,self.n):
             for j in range (0, i+1):
                 F[:,i,0] *= x[:,j]^True
         # print('base case done')
         for i in range(1, self.n):
-            W = nn.functional.softmax(self.W[i-1],dim=1) #shape self.k-1, 2
-            F[:,i,1:] = x[:,i].unsqueeze(1)*W[:,0]*F[:,i-1,:self.k-1].clone() + W[:,1]*F[:,i-1,1:].clone() #
+            W = W_full[i-1]
+            
+            # if i< self.k-1:
+                
+                
+                 #shape self.k-1, 2
+            F[:,i,1:] = x[:,i].unsqueeze(1)*W[:,0]*F[:,i-1,:self.k-1].clone() + (x[:,i]^True).unsqueeze(1)*W[:,1]*F[:,i-1,1:].clone() #
+            
             # F[:,i,1:] += 
             # print('done')
             # #x[:,i].shape = B,1
@@ -340,10 +370,10 @@ if __name__=="__main__":
     import models
     from time import time
 
-    sanity_check_gen(10,2)
+    sanity_check_gen(5,2)
     opt=parse_args()
     train_data=DatasetFromFile('sanity_check')
-    train_dl = DataLoader(train_data, batch_size=5)
+    train_dl = DataLoader(train_data, batch_size=7)
     # train_data.info['k']=2
     # start_time = time()
     # model=naivePC(train_data.info) #model construction time too long
@@ -359,7 +389,7 @@ if __name__=="__main__":
         outputs.append(out)
         # break
     outputs = torch.cat(outputs)
-    print(torch.exp(outputs))
+    print(torch.exp(outputs).sum()) #check if sum is 1
 
 
     pass
