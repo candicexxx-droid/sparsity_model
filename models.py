@@ -273,8 +273,9 @@ class arrayPC(nn.Module):
         F = torch.log(F)
         F[F.isinf()]= p_inf
         W = nn.functional.softmax(self.W,dim=2)
-        W_full = W * self.W_adjust1 + self.W_adjust2
-
+        # W_full = W * self.W_adjust1 + self.W_adjust2
+        W_full = W
+        W_full = torch.log(W_full)   
         for i in range(1, self.n):
             W = W_full[i-1]#shape self.k-1, 2
 
@@ -285,7 +286,7 @@ class arrayPC(nn.Module):
             #     W_adjust2[i][0] = 1
             #     W = W * W_adjust1 + W_adjust2
             
-            W = torch.log(W)   
+            # W = 
             prior = torch.stack([F[:,i-1,:self.k-1].clone(), F[:,i-1,1:].clone()],dim=2) #shape B, self.k-1, 2
             
             log_x_part = torch.log(x[:,i].unsqueeze(1))
@@ -370,7 +371,7 @@ if __name__=="__main__":
     import models
     from time import time
 
-    sanity_check_gen(5,2)
+    sanity_check_gen(3,2)
     opt=parse_args()
     train_data=DatasetFromFile('sanity_check')
     train_dl = DataLoader(train_data, batch_size=7)
