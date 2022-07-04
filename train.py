@@ -81,6 +81,19 @@ def main(opt):
 
             tb_writer.add_scalar("%s/avg_ll"%"train", train_ll, epoch)
             tb_writer.add_scalar("%s/avg_ll"%"valid", valid_ll, epoch)
+            if epoch%10==0:
+                torch.save({
+                'epoch': epoch,
+                
+                'model':model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'loss': avg_loss,
+                
+                }, opt.output_dir+"/end_chpt.pt")
+
+
+
+
         tb_writer.add_scalar("%s/avg_ll"%"test", train_ll, epoch)
     
     #save at the end of the epoch
