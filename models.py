@@ -253,6 +253,7 @@ class arrayPC(nn.Module):
         for i in range(1, self.k-1):
             self.W_adjust1[i-1][i:,:]= 0
             self.W_adjust2[:,i,:][0][0] = 1
+        self.episl = 0
         # self.F = torch.zeros()
     def forward(self, x):
          #x.shape = B, n
@@ -271,10 +272,14 @@ class arrayPC(nn.Module):
         p_inf = torch.tensor(-float('inf'))
         # p_inf = -10**(10)
         F = torch.log(F)
-        F[F.isinf()]= p_inf
+        F[F.isinf()]= 1
         W = nn.functional.softmax(self.W,dim=2)
-        # W_full = W * self.W_adjust1 + self.W_adjust2
-        W_full = W
+
+        # W_full = torch.stack([torch.log(W)+ torch.log(self.W_adjust1), torch.log(self.W_adjust2)])
+        # W_full = torch.logsumexp(W_full, dim=3)
+        # W_full = W
+        
+        W_full = W * self.W_adjust1 + self.W_adjust2 + self.episl
         W_full = torch.log(W_full)   
         for i in range(1, self.n):
             W = W_full[i-1]#shape self.k-1, 2
@@ -289,15 +294,16 @@ class arrayPC(nn.Module):
             # W = 
             prior = torch.stack([F[:,i-1,:self.k-1].clone(), F[:,i-1,1:].clone()],dim=2) #shape B, self.k-1, 2
             
-            log_x_part = torch.log(x[:,i].unsqueeze(1))
-            log_x_part[log_x_part.isinf()]= p_inf
+            log_x_part = torch.log(x[:,i].unsqueeze(1) + self.episl)
+            # log_x_part[log_x_part.isinf()]= p_inf
 
-            log_x_bar_part = torch.log((x[:,i]^True).unsqueeze(1))
-            log_x_bar_part[log_x_bar_part.isinf()]= p_inf
+            log_x_bar_part = torch.log((x[:,i]^True).unsqueeze(1)+ self.episl)
+            # log_x_bar_part[log_x_bar_part.isinf()]= p_inf
 
             prior[:,:,0] += log_x_part
             prior[:,:,1] += log_x_bar_part
             F[:,i,1:] = torch.logsumexp(W+prior,dim=2)
+
             # print(' ')
             # F[:,i,1:] += 
             # print('done')
@@ -306,10 +312,11 @@ class arrayPC(nn.Module):
 
         endW = torch.log(nn.functional.softmax(self.endW,dim=1))
         # out = torch.matmul(F[:,-1,:],)
-        non_inf = ~F[:,-1,:].isinf()
-        endW = endW.repeat(x.shape[0],1)[non_inf]
+        # non_inf = ~F[:,-1,:].isinf()
+        # endW = endW.repeat(x.shape[0],1)[non_inf]
         # out = torch.logsumexp(endW+F[:,-1,:][non_inf],dim=0)
-        out = endW+F[:,-1,:][non_inf]
+        out = torch.max(endW+F[:,-1,:],dim=-1)[0]
+        # [non_inf]
         # out = torch.log(out)
         return out
 
