@@ -1,7 +1,7 @@
 from turtle import forward
 import torch
 import torch.nn as nn
-
+import itertools
 
 
 #see how to pass children's result to parent
@@ -115,6 +115,47 @@ class naivePC(nn.Module):
     def forward(self,x):
 
         return self.root(x)
+
+class bruteForce(nn.Module):
+    def __init__(self, data_info) -> None:
+        super().__init__()
+        
+        self.n = data_info['n']
+        seq = list(range(self.n))
+        total_case = 0
+        self.k = data_info['k']
+        self.table = []
+
+        for i in range(self.k+1):
+            comb = list(itertools.combinations(seq,i))
+            for j in comb:
+                t = torch.zeros(self.n)
+                idx = torch.tensor(j)
+                if len(idx)>0:
+                    t[idx] = 1 
+                self.table.append(t)
+
+
+
+            total_case += len(comb)
+        self.table = torch.stack(self.table).to(torch.int)
+        self.W = nn.Parameter(torch.randn(total_case),requires_grad=True)
+        print(' ')
+
+
+
+    def forward(self,x):
+        out = []
+        W = nn.functional.softmax(self.W)
+        for i in x:
+            check_eql = (torch.sum(self.table^i, axis=1)==0).nonzero()[0]
+            out.append(W[check_eql])
+        out = torch.stack(out)
+        return torch.log(out)
+
+
+
+        pass 
 
 
 class LEnsemble(nn.Module):
@@ -259,6 +300,7 @@ class arrayPC_naive(arrayPC):
         # self.W = nn.Parameter(torch.randn(self.n-1,self.k-1,2), requires_grad=True)
         # self.endW = self.endW.transpose(1,0)
         # self.F = torch.zeros()
+        self.endW.data = self.endW.data.transpose(1,0)
     def forward(self, x):
          #x.shape = B, n
         F = torch.zeros(x.shape[0], self.n, self.k)
@@ -277,10 +319,12 @@ class arrayPC_naive(arrayPC):
             # #x[:,i].shape = B,1
             pass 
 
-        self.endW.data = self.endW.data.transpose(1,0)
+        
         endW = nn.functional.softmax(self.endW,dim=0)
         out = torch.matmul(F[:,-1,:],endW)
         out = torch.log(out)
+        if (out > 1).sum()>0:
+            print('pausze')
         return out
 
             
@@ -291,11 +335,12 @@ class arrayPC_naive(arrayPC):
 
 if __name__=="__main__":
     from utils import *
+    from sanity_check_gen import *
     from torch.utils.data import DataLoader
     import models
     from time import time
 
-    
+    sanity_check_gen(10,2)
     opt=parse_args()
     train_data=DatasetFromFile('sanity_check')
     train_dl = DataLoader(train_data, batch_size=5)
@@ -308,12 +353,13 @@ if __name__=="__main__":
     # model = compElemDPP(train_data.info)
 
     # print('time elapsed for model building: %d' %(end_time-start_time))
-
+    outputs = []
     for i in train_dl:
         out=model(i)
-        break
-
-    print(out)
+        outputs.append(out)
+        # break
+    outputs = torch.cat(outputs)
+    print(torch.exp(outputs))
 
 
     pass
