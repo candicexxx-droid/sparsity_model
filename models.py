@@ -279,6 +279,8 @@ class arrayPC(nn.Module):
         F = torch.log(F)
         F[F.isinf()]= p_inf
         W = nn.functional.softmax(self.W,dim=2)
+        self.W_adjust1=self.W_adjust1.to(device) 
+        self.W_adjust2 = self.W_adjust2.to(device)
         W_full = W * self.W_adjust1 + self.W_adjust2 + self.episl
         # 
         # W_full = W
