@@ -81,7 +81,7 @@ def main(opt):
 
             tb_writer.add_scalar("%s/avg_ll"%"train", train_ll, epoch)
             tb_writer.add_scalar("%s/avg_ll"%"valid", valid_ll, epoch)
-            if epoch%10==0:
+            if epoch%3==0:
                 torch.save({
                 'epoch': epoch,
                 
