@@ -389,9 +389,9 @@ if __name__=="__main__":
     import models
     from time import time
 
-    sanity_check_gen(20,4)
+    sanity_check_gen(2,2)
     opt=parse_args()
-    train_data=DatasetFromFile('sanity_check')
+    train_data=DatasetFromFile('kosarek')
     train_dl = DataLoader(train_data, batch_size=7)
     # train_data.info['k']=2
     # start_time = time()

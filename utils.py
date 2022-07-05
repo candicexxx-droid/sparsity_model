@@ -61,7 +61,10 @@ class DatasetFromFile(Dataset):
                 line = line.strip()
                 if line == '':
                     continue
-                line = [int(x) for x in line.split(',')]
+                if 'mnist' in dataset_name:
+                    line = [int(x) for x in line.split(' ')]
+                else:
+                    line = [int(x) for x in line.split(',')]
                 examples.append(line)
         x = torch.tensor(examples,dtype=torch.long)
         self.x = x
@@ -81,6 +84,13 @@ class DatasetFromFile(Dataset):
         print('shape of one obersvation:', self.x[0].shape[0])
         print('largest number of non zero entries in a single observation:', self.info['k'].item())
         print('============================================================================')
+    
+    def count_unique(self):
+        """
+        count unique occurances of binary vector in the dataset
+        """
+        data = self.x.cpu().detach().numpy()
+        return np.unique(data, axis=0, return_counts=True)
 
 if __name__ == "__main__":
     data=DatasetFromFile('nips')
