@@ -1,5 +1,4 @@
 import argparse
-from fileinput import filename
 import sys
 import os
 from random import randint
@@ -45,7 +44,27 @@ def process_opt(opt):
     
     print ("log will be saved at %s" % opt.output_dir)
 
-
+def nll(y):
+    """
+    adapted from https://github.com/joshuacnf/Probabilistic-Generating-Circuits/blob/18700951ad18759e95ca85430da66042931b6c8b/pgc/train.py#L163
+    """
+    ll = -torch.sum(y)
+    return ll
+def avg_ll(model, dataset_loader,device):
+    """
+    adapted from https://github.com/joshuacnf/Probabilistic-Generating-Circuits/blob/18700951ad18759e95ca85430da66042931b6c8b/pgc/train.py#L163
+    """
+    lls = []
+    dataset_len = 0
+    model.eval()
+    for x_batch in dataset_loader:
+        x_batch = x_batch.to(device)
+        y_batch = model(x_batch)
+        ll = torch.sum(y_batch)
+        lls.append(ll.item())
+        dataset_len += x_batch.shape[0]
+    avg_ll = torch.sum(torch.Tensor(lls)).item() / dataset_len
+    return avg_ll
 
 class DatasetFromFile(Dataset):
     """

@@ -7,6 +7,7 @@ import models
 import json
 from utils import *
 from tqdm import tqdm
+import argparse
 
 # x = torch.tensor(1., requires_grad=True)
 # z = torch.tensor(0., requires_grad=True)
@@ -15,6 +16,12 @@ from tqdm import tqdm
 # print('y:', y)
 # y.backward() # this is the same as y.backward(tensor(1.))
 # print('x.grad:', x.grad)
+
+def parse_args():
+    parser = argparse.ArgumentParser("test")
+    parser.add_argument('-path', type=str, default='nips', help='specify dataset')
+    parser.add_argument('-test_likelihood',action='store_true', default=False,help='test the total likelihood of unique occurence in the train dataset (see the extent of likelihood maximization')
+
 
 def load_opt(path):
     
@@ -48,7 +55,8 @@ def test(opt, path, test_likelihood=False):
     return l
 
 
+
 if __name__ == "__main__":
-    path='/home/josh/testest/sparsity_model/log/Jul05_11-16-31_id0_arrayPC_ad'
-    opt = load_opt(path)
-    test(opt, path, True)
+    args = parse_args()
+    opt = load_opt(args.path)
+    test(opt, args.path, args.test_likelihood)
