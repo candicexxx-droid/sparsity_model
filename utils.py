@@ -85,14 +85,17 @@ class DatasetFromFile(Dataset):
         print('largest number of non zero entries in a single observation:', self.info['k'].item())
         print('============================================================================')
     
-    def count_unique(self):
+    def unique(self,test_likelihood=False):
         """
-        count unique occurances of binary vector in the dataset
+        return unique occurances of binary vector in the dataset
         """
         data = self.x.cpu().detach().numpy()
-        return np.unique(data, axis=0, return_counts=True)
+        if test_likelihood:
+            self.x = torch.tensor(np.unique(data, axis=0))
+        else:
+            return np.unique(data, axis=0)
 
 if __name__ == "__main__":
-    data=DatasetFromFile('nips')
-    data.print_info()
+    data=DatasetFromFile('ad')
+    d = data.unique()
     print('done')
