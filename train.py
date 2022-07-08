@@ -57,7 +57,7 @@ def main(opt):
     json.dump(hyperparam, hyperparam_file)
     hyperparam_file.close()
 
-
+    log_file = opt.output_dir+"/log.txt"
     with torch.autograd.set_detect_anomaly(True):
         for epoch in range(1, opt.epoch + 1):
             
@@ -90,25 +90,29 @@ def main(opt):
             print('Dataset {}; Epoch {}, avg Loss per example: {}'.format(opt.data, epoch, avg_loss))
             tb_writer.add_scalar("%s/avg_loss"%"train", avg_loss, epoch)
             # compute likelihood on train, valid and test
-            # train_ll = avg_ll(model, train_dl,device)
+            train_ll = -avg_loss
             valid_ll = avg_ll(model, valid_dl,device)
             # test_ll = avg_ll(model, test_dl)
 
             tb_writer.add_scalar("%s/avg_ll"%"train", -avg_loss, epoch)
             tb_writer.add_scalar("%s/avg_ll"%"valid", valid_ll, epoch)
-            if epoch%3==0:
-                torch.save({
-                'epoch': epoch,
-                
-                'model':model.state_dict(),
-                'optimizer_state_dict': optimizer.state_dict(),
-                'loss': avg_loss,
-                
-                }, opt.output_dir+"/end_chpt.pt")
+            
+            with open(log_file, 'a+') as f:
+                f.write('Epoch: %d train: %.5f validation: %.5f \n'%(epoch, train_ll, valid_ll))
+            torch.save({
+            'epoch': epoch,
+            
+            'model':model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'loss': avg_loss,
+            
+            }, opt.output_dir+"/end_chpt.pt")
 
 
 
         test_ll = avg_ll(model, test_dl,device)
+        with open(log_file, 'a+') as f:
+            f.write('End test: %.5f \n'%test_ll)
         tb_writer.add_scalar("%s/avg_ll"%"test", test_ll, epoch)
     
     #save at the end of the epoch
