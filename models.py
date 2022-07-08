@@ -1,4 +1,5 @@
 from turtle import forward
+from numpy import array
 import torch
 import torch.nn as nn
 import itertools
@@ -165,35 +166,62 @@ class LEnsemble(nn.Module):
 
     def __init__(self, data_info) -> None:
         super().__init__()
-        n = data_info['n']
+        self.n = data_info['n']
+        n = self.n
+        # k = data_info['k']
+        # # B = torch.randn(n, data_info['k'])
+        # B = torch.randn(n, n)
+        # B_norm = torch.norm(B, dim=0)
+        # for i in range(0, k):
+        #     B[:,i] /= B_norm[i]
+        # self.B = nn.Parameter(B, requires_grad=True) #n *k 
+        # self.I = torch.eye(n)
+        
+        # self.n = n
+
         k = data_info['k']
         B = torch.randn(n, data_info['k'])
         B_norm = torch.norm(B, dim=0)
-        # for i in range(0, k):
-        #     B[:,i] /= B_norm[i]
-        self.B = nn.Parameter(B, requires_grad=True) #n *k 
-        self.I = torch.eye(n)
+        for i in range(0, k):
+            B[:,i] /= B_norm[i]
+        self.B = nn.Parameter(B, requires_grad=True)
 
         
 
     def forward(self,x): #output log likelihood
-        #x.shape = B, n
-        eps = 1e-8 #soften the k-constraints
-        L = torch.matmul(self.B,self.B.transpose(1,0)) 
-        # + eps*self.I
-        # L = self.L.unsqueeze(0).repeat(x.shape[0],1,1)
+        # n = self.n
+        # batch_size = x.shape[0]
 
-        # norm = torch.det(L+self.I) #results in inf?
-        # still not sure how to enforce k constraints? 
-        log_norm = torch.logdet(L+self.I)
-        outputs = []
-        for i in x:
-            idx = (i==1)
-            L_y = L[idx,:][:,idx]
-            out = torch.logdet(L_y)-log_norm # log likelihood
-            outputs.append(out)
-        outputs = torch.stack(outputs)
-        return outputs
+        # eps = 1e-8
+        # I = self.I.to(x.device)
+        # L = torch.matmul(self.B,self.B.transpose(1,0))  + eps * I
+        # L0 = L.clone()
+        # L = L.unsqueeze(0).repeat(batch_size, 1, 1)
+
+        # L[x == 0] = 0.0
+        # L[x.unsqueeze(1).repeat(1,n,1) == 0] = 0.0
+        # L[torch.diag_embed(1-x) == 1] = 1.0
+
+        # y = torch.logdet(L)
+        # if torch.isnan(y).sum()>0:
+        #     print('find nan!')
+        # return y - torch.logdet(L0 + I)
+        n = self.n
+        batch_size = x.shape[0]
+
+        eps = 1e-8
+        I = torch.eye(n).to(x.device)
+        L = torch.matmul(self.B,self.B.transpose(1,0))  + eps * I
+        L0 = L.clone()
+        L = L.unsqueeze(0).repeat(batch_size, 1, 1)
+
+        L[x == 0] = 0.0
+        L[x.unsqueeze(1).repeat(1,n,1) == 0] = 0.0
+        L[torch.diag_embed(1-x) == 1] = 1.0
+
+        y = torch.logdet(L)
+        return y - torch.logdet(L0 + I)
+
 
 class compElemDPP(nn.Module):
     def __init__(self, data_info) -> None:
@@ -327,6 +355,27 @@ class arrayPC(nn.Module):
 
         return out
 
+class multi_arrayPC(nn.Module): #a prod node
+    def __init__(self, data_info) -> None:
+        super().__init__()
+        self.array_PCs = []
+        for i in data_info:
+            self.array_PCs.append(arrayPC(i))
+        # print(' ')
+    def to(self,device):
+        self.array_PCs = [i.to(device) for i in self.array_PCs]
+        return self
+    def forward(self,x):
+        outputs = []
+        for i in range(len(x)):
+            outputs.append(self.array_PCs[i](x[i]))
+        # print(" ")
+        out = torch.cat(outputs).sum()
+        return out
+
+
+
+
 class arrayPC_naive(arrayPC):
     def __init__(self, data_info)-> None:
         super().__init__(data_info)
@@ -388,10 +437,11 @@ if __name__=="__main__":
     from torch.utils.data import DataLoader
     import models
     from time import time
+    from tqdm import tqdm
 
-    sanity_check_gen(2,2)
+    # sanity_check_gen(5,3)
     opt=parse_args()
-    train_data=DatasetFromFile('kosarek')
+    train_data=DatasetFromFile(opt.data, 7)
     train_dl = DataLoader(train_data, batch_size=7)
     # train_data.info['k']=2
     # start_time = time()
@@ -403,7 +453,7 @@ if __name__=="__main__":
 
     # print('time elapsed for model building: %d' %(end_time-start_time))
     outputs = []
-    for i in train_dl:
+    for i in tqdm(train_dl,leave=True):
         out=model(i)
         outputs.append(out)
         # break

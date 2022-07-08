@@ -6,13 +6,6 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 import json
 
-
-def nll(y):
-    """
-    adapted from https://github.com/joshuacnf/Probabilistic-Generating-Circuits/blob/18700951ad18759e95ca85430da66042931b6c8b/pgc/train.py#L163
-    """
-    ll = -torch.sum(y)
-    return ll
 def avg_ll(model, dataset_loader,device):
     """
     adapted from https://github.com/joshuacnf/Probabilistic-Generating-Circuits/blob/18700951ad18759e95ca85430da66042931b6c8b/pgc/train.py#L163
@@ -20,12 +13,19 @@ def avg_ll(model, dataset_loader,device):
     lls = []
     dataset_len = 0
     model.eval()
-    for x_batch in dataset_loader:
-        x_batch = x_batch.to(device)
+    is_multi = isinstance(model,models.multi_arrayPC)
+    for x_batch in tqdm(dataset_loader,leave=True):
+        if is_multi:
+            x_batch = [i.to(device) for i in x_batch]
+        else:
+            x_batch = x_batch.to(device)
         y_batch = model(x_batch)
         ll = torch.sum(y_batch)
         lls.append(ll.item())
-        dataset_len += x_batch.shape[0]
+        if is_multi:
+            dataset_len += x_batch[0].shape[0]
+        else:
+            dataset_len += x_batch.shape[0]
     avg_ll = torch.sum(torch.Tensor(lls)).item() / dataset_len
     return avg_ll
 
@@ -35,11 +35,20 @@ def main(opt):
     device_name="cuda:%d"%opt.cuda if torch.cuda.is_available() else "cpu"
     device = torch.device(device_name)
 
-    train_data, valid_data, test_data= DatasetFromFile(opt.data),DatasetFromFile(opt.data, 'valid'),DatasetFromFile(opt.data,'test')
+    train_data, valid_data, test_data= DatasetFromFile(opt.data, opt.group_num),DatasetFromFile(opt.data, opt.group_num, 'valid'),DatasetFromFile(opt.data,opt.group_num,'test')
     train_dl, valid_dl, test_dl = DataLoader(train_data, batch_size=opt.batch_size),DataLoader(valid_data, batch_size=opt.batch_size),DataLoader(test_data, batch_size=opt.batch_size)
+
     model = getattr(models, opt.model)(train_data.info)
     model = model.to(device)
-    optimizer = optim.SGD(model.parameters(),opt.lr,opt.momentum,opt.weight_d) if opt.optimizer =='SGD' else optim.Adam(model.parameters(), lr=opt.lr, weight_decay=opt.weight_d)
+    is_multi = isinstance(model,models.multi_arrayPC)
+    if is_multi:
+        param = []
+        for i in model.array_PCs:
+            param += list(i.parameters())
+    else:
+        param = list(model.parameters())
+    print('number of param: %d'%sum([torch.prod(torch.tensor(i.shape)).item() for i in param]))
+    optimizer = optim.SGD(param,opt.lr,opt.momentum,opt.weight_d) if opt.optimizer =='SGD' else optim.Adam(model.parameters(), lr=opt.lr, weight_decay=opt.weight_d)
     
     tb_writer = SummaryWriter(log_dir=opt.output_dir)
     
@@ -56,12 +65,18 @@ def main(opt):
             losses=[]
             num_items = []
             for x_batch in tqdm(train_dl,leave=True):
-
-                x_batch = x_batch.to(device)
+                
+                if is_multi:
+                    x_batch = [i.to(device) for i in x_batch]
+                else:
+                    x_batch = x_batch.to(device)
                 y_batch = model(x_batch)
                 loss = nll(y_batch)
                 losses.append(loss)
-                num_items.append(x_batch.shape[0])
+                if is_multi:
+                    num_items.append(x_batch[0].shape[0])
+                else:
+                    num_items.append(x_batch.shape[0])
                 optimizer.zero_grad()
                 # loss.backward(inputs=list(model.parameters()))
                 loss.backward()
@@ -75,11 +90,11 @@ def main(opt):
             print('Dataset {}; Epoch {}, avg Loss per example: {}'.format(opt.data, epoch, avg_loss))
             tb_writer.add_scalar("%s/avg_loss"%"train", avg_loss, epoch)
             # compute likelihood on train, valid and test
-            train_ll = avg_ll(model, train_dl,device)
+            # train_ll = avg_ll(model, train_dl,device)
             valid_ll = avg_ll(model, valid_dl,device)
             # test_ll = avg_ll(model, test_dl)
 
-            tb_writer.add_scalar("%s/avg_ll"%"train", train_ll, epoch)
+            tb_writer.add_scalar("%s/avg_ll"%"train", -avg_loss, epoch)
             tb_writer.add_scalar("%s/avg_ll"%"valid", valid_ll, epoch)
             if epoch%3==0:
                 torch.save({
@@ -93,8 +108,8 @@ def main(opt):
 
 
 
-
-        tb_writer.add_scalar("%s/avg_ll"%"test", train_ll, epoch)
+        test_ll = avg_ll(model, test_dl,device)
+        tb_writer.add_scalar("%s/avg_ll"%"test", test_ll, epoch)
     
     #save at the end of the epoch
     torch.save({
