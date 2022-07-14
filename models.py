@@ -311,7 +311,7 @@ class arrayPC(nn.Module):
         # W = nn.functional.softmax(self.W,dim=2)
         for i in range(1,self.k-1):
             self.W[i-1][:i,:] = nn.functional.softmax(self.W[i-1][:i,:],dim=1)
-        self.W[self.k-2:,:,:] = nn.functional.softmax(self.W[self.k-1:,:,:],dim=2)
+        self.W[self.k-2:,:,:] = nn.functional.softmax(self.W[self.k-2:,:,:],dim=2)
         W_append = torch.zeros(self.n-1,1,2)
         W_append[:,:,0] = 1
         W_append= W_append.to(device)
