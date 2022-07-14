@@ -1,3 +1,4 @@
+from tokenize import group
 from turtle import forward
 from numpy import array
 import torch
@@ -211,7 +212,8 @@ class LEnsemble(nn.Module):
 
         eps = 1e-8
         I = torch.eye(n).to(x.device)
-        L = torch.matmul(self.B,self.B.transpose(1,0))  + eps * I
+        L = torch.matmul(self.B,self.B.transpose(1,0))  
+        # + eps * I
         L0 = L.clone()
         L = L.unsqueeze(0).repeat(batch_size, 1, 1)
 
@@ -272,7 +274,7 @@ class arrayPC(nn.Module):
     def __init__(self, data_info)-> None:
         super().__init__()
         self.n, self.k = data_info['n'],(data_info['k']+1)
-        torch.manual_seed(10)
+        # torch.manual_seed(10)
         self.W = nn.Parameter(torch.randn(self.n-1,self.k-1,2), requires_grad=True)
         self.endW = nn.Parameter(torch.randn(1,self.k), requires_grad=True)
         self.W_adjust1 = torch.ones(self.W.shape)
@@ -373,6 +375,28 @@ class multi_arrayPC(nn.Module): #a prod node
         out = torch.cat(outputs).sum()
         return out
 
+class sum_arrayPCs(nn.Module): #a prod node
+    def __init__(self, data_info, group_num=10) -> None:
+        super().__init__()
+        self.array_PCs = []
+        self.group_num = group_num
+        for i in range(group_num):
+            self.array_PCs.append(arrayPC(data_info))
+        # print(' ')
+        self.W = nn.Parameter(torch.randn(1,group_num), requires_grad=True)
+    def to(self,device):
+
+        self.array_PCs = [i.to(device) for i in self.array_PCs]
+        return self
+    def forward(self,x):
+        outputs = []
+        for i in range(self.group_num):
+            outputs.append(self.array_PCs[i](x))
+        # print(" ")
+        W = nn.functional.softmax(self.W,dim=1).to(x.device)
+        out = torch.matmul(W,torch.stack(outputs))[0]
+        return out
+
 
 
 
@@ -441,7 +465,7 @@ if __name__=="__main__":
 
     # sanity_check_gen(5,3)
     opt=parse_args()
-    train_data=DatasetFromFile(opt.data, 7)
+    train_data=DatasetFromFile(opt.data)
     train_dl = DataLoader(train_data, batch_size=7)
     # train_data.info['k']=2
     # start_time = time()

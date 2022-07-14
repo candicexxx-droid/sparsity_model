@@ -18,7 +18,7 @@ def parse_args():
     parser.add_argument('-batch_size', type=int, default=32, help='batch size')
     parser.add_argument('-epoch', default=50, type=int, help='epoch#')
     parser.add_argument('-cuda', type=int, default=0, help="specify cuda index")
-    parser.add_argument('-group_num', type=int, default=1, help="group num for multi arrayPC")
+    parser.add_argument('-group_num', type=int, default=1, help="group num for sum_arrayPCs")
     #optimizer
     parser.add_argument('-optimizer', type=str, default='Adam', help='Adam or SGD')
     parser.add_argument('-lr', default=0.001, type=float)
@@ -77,7 +77,10 @@ class DatasetFromFile(Dataset):
     """
     adapted from https://github.com/joshuacnf/Probabilistic-Generating-Circuits/blob/main/pgc/train.py
     """
-    def __init__(self, dataset_name, group_num=1, mode='train'):
+    def __init__(self, dataset_name,  mode='train',group_num=1,):
+        """
+        group_num deprecated, do not specify
+        """
         examples = []
         self.mode = mode
         #run init under project root
@@ -135,12 +138,13 @@ class DatasetFromFile(Dataset):
         else:
             return np.unique(data, axis=0,return_counts=True)
     
-    def split_data_set(self, group_num):
+    def split_data_set(self, group_num=1):
         """
-        split and arrange data based on frequency of each unique appearance
+        split and arrange data based on frequency of each unique appearance or duplicate
         input: DataFromFile object, group num
         output: return group_num of split data_set?
         """
+        
         d = self.unique()[0].sum(axis=0)
         d = np.argsort(d)[::-1].copy() #with sorting
         # d = np.arange(self.info['n']) #no sorting
@@ -185,7 +189,7 @@ class DatasetFromFile(Dataset):
 
 
 if __name__ == "__main__":
-    data=DatasetFromFile('sanity_check',1)
+    data=DatasetFromFile('sanity_check')
     
     # data.split_data_set(group_num=5)
     # data[1]

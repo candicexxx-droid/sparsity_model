@@ -13,19 +13,19 @@ def avg_ll(model, dataset_loader,device):
     lls = []
     dataset_len = 0
     model.eval()
-    is_multi = isinstance(model,models.multi_arrayPC)
+    # is_multi = isinstance(model,models.multi_arrayPC)
     for x_batch in tqdm(dataset_loader,leave=True):
-        if is_multi:
-            x_batch = [i.to(device) for i in x_batch]
-        else:
-            x_batch = x_batch.to(device)
+        # if is_multi:
+        #     x_batch = [i.to(device) for i in x_batch]
+        # else:
+        x_batch = x_batch.to(device)
         y_batch = model(x_batch)
         ll = torch.sum(y_batch)
         lls.append(ll.item())
-        if is_multi:
-            dataset_len += x_batch[0].shape[0]
-        else:
-            dataset_len += x_batch.shape[0]
+        # if is_multi:
+        #     dataset_len += x_batch[0].shape[0]
+        # else:
+        dataset_len += x_batch.shape[0]
     avg_ll = torch.sum(torch.Tensor(lls)).item() / dataset_len
     return avg_ll
 
@@ -35,19 +35,22 @@ def main(opt):
     device_name="cuda:%d"%opt.cuda if torch.cuda.is_available() else "cpu"
     device = torch.device(device_name)
 
-    train_data, valid_data, test_data= DatasetFromFile(opt.data, opt.group_num),DatasetFromFile(opt.data, opt.group_num, 'valid'),DatasetFromFile(opt.data,opt.group_num,'test')
+    train_data, valid_data, test_data= DatasetFromFile(opt.data),DatasetFromFile(opt.data,'valid'),DatasetFromFile(opt.data,'test')
     train_dl, valid_dl, test_dl = DataLoader(train_data, batch_size=opt.batch_size),DataLoader(valid_data, batch_size=opt.batch_size),DataLoader(test_data, batch_size=opt.batch_size)
-
-    model = getattr(models, opt.model)(train_data.info)
+    if "sum" in opt.model:
+        model = getattr(models, opt.model)(train_data.info, opt.group_num)
+    else:
+        model = getattr(models, opt.model)(train_data.info)
     model = model.to(device)
-    is_multi = isinstance(model,models.multi_arrayPC)
+    is_multi = isinstance(model,models.multi_arrayPC) or isinstance(model,models.sum_arrayPCs)
     if is_multi:
         param = []
         for i in model.array_PCs:
             param += list(i.parameters())
     else:
         param = list(model.parameters())
-    print('number of param: %d'%sum([torch.prod(torch.tensor(i.shape)).item() for i in param]))
+    num_param = sum([torch.prod(torch.tensor(i.shape)).item() for i in param])
+    print('number of param: %d'%num_param)
     optimizer = optim.SGD(param,opt.lr,opt.momentum,opt.weight_d) if opt.optimizer =='SGD' else optim.Adam(model.parameters(), lr=opt.lr, weight_decay=opt.weight_d)
     
     tb_writer = SummaryWriter(log_dir=opt.output_dir)
@@ -58,6 +61,8 @@ def main(opt):
     hyperparam_file.close()
 
     log_file = opt.output_dir+"/log.txt"
+    with open(log_file, 'a+') as f:
+        f.write('number of param: %d \n'%(num_param))
     with torch.autograd.set_detect_anomaly(True):
         for epoch in range(1, opt.epoch + 1):
             
@@ -66,17 +71,17 @@ def main(opt):
             num_items = []
             for x_batch in tqdm(train_dl,leave=True):
                 
-                if is_multi:
-                    x_batch = [i.to(device) for i in x_batch]
-                else:
-                    x_batch = x_batch.to(device)
+                # if is_multi and isinstance(model,models.multi_arrayPC):
+                #     x_batch = [i.to(device) for i in x_batch]
+                # else:
+                x_batch = x_batch.to(device)
                 y_batch = model(x_batch)
                 loss = nll(y_batch)
                 losses.append(loss)
-                if is_multi:
-                    num_items.append(x_batch[0].shape[0])
-                else:
-                    num_items.append(x_batch.shape[0])
+                # if is_multi and isinstance(model,models.multi_arrayPC):
+                #     num_items.append(x_batch[0].shape[0])
+                # else:
+                num_items.append(x_batch.shape[0])
                 optimizer.zero_grad()
                 # loss.backward(inputs=list(model.parameters()))
                 loss.backward()
@@ -98,7 +103,7 @@ def main(opt):
             tb_writer.add_scalar("%s/avg_ll"%"valid", valid_ll, epoch)
             
             with open(log_file, 'a+') as f:
-                f.write('Epoch: %d train: %.5f validation: %.5f \n'%(epoch, train_ll, valid_ll))
+                f.write('%s Epoch: %d train: %.5f validation: %.5f \n'%(opt.model, epoch, train_ll, valid_ll))
             torch.save({
             'epoch': epoch,
             
