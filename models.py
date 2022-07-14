@@ -417,36 +417,17 @@ class arrayPC_naive(arrayPC):
         
         W = nn.functional.softmax(self.W,dim=2)
         W_full = W * self.W_adjust1 + self.W_adjust2
-
-        # W_full = 
-        # W_full = 
-        # 
-
-
         for i in range(0,self.n):
             for j in range (0, i+1):
                 F[:,i,0] *= x[:,j]^True
         # print('base case done')
         for i in range(1, self.n):
             W = W_full[i-1]
-            
-            # if i< self.k-1:
-                
-                
-                 #shape self.k-1, 2
             F[:,i,1:] = x[:,i].unsqueeze(1)*W[:,0]*F[:,i-1,:self.k-1].clone() + (x[:,i]^True).unsqueeze(1)*W[:,1]*F[:,i-1,1:].clone() #
-            
-            # F[:,i,1:] += 
-            # print('done')
-            # #x[:,i].shape = B,1
             pass 
-
-        
         endW = nn.functional.softmax(self.endW,dim=0)
         out = torch.matmul(F[:,-1,:],endW)
         out = torch.log(out)
-        if (out > 1).sum()>0:
-            print('pausze')
         return out
 
             
@@ -463,7 +444,7 @@ if __name__=="__main__":
     from time import time
     from tqdm import tqdm
 
-    # sanity_check_gen(5,3)
+    sanity_check_gen(5,3)
     opt=parse_args()
     train_data=DatasetFromFile(opt.data)
     train_dl = DataLoader(train_data, batch_size=7)
