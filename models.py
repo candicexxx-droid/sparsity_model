@@ -296,17 +296,17 @@ class arrayPC(nn.Module):
         W_full = W * self.W_adjust1 + self.W_adjust2
         W_full = torch.cat([W_append,W_full],dim = 1)
         group_num = torch.clone(x[:,0])
-        out = torch.ones(x.shape[0],1)
+        out = torch.zeros(x.shape[0],1)
         for i in range(1,self.n):
             group_num+=x[:,i]
             idx = x[:,i]
             selected_group = torch.index_select(W_full[i-1],0,group_num)
             # print('hi')
-            out *=selected_group.gather(1,idx.unsqueeze(1))
+            out +=torch.log(selected_group.gather(1,idx.unsqueeze(1)))
             pass
         endW = nn.functional.softmax(self.endW,dim=1)
         endW = torch.index_select(endW,1,group_num).transpose(1,0)
-        out = out * endW
+        out = out + torch.log(endW)
         return out
 
 class multi_arrayPC(nn.Module): #a prod node
@@ -426,8 +426,8 @@ if __name__=="__main__":
         outputs.append(out)
         # break
     outputs = torch.cat(outputs)
-    # print(torch.exp(outputs).sum()) #check if sum is 1
-    print(outputs.sum())
+    print(torch.exp(outputs).sum()) #check if sum is 1
+    # print(outputs.sum())
 
 
     pass
