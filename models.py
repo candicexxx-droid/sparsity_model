@@ -287,7 +287,8 @@ class arrayPC(nn.Module):
             temp = self.W_adjust2[i].view(-1)
             temp[2+2*i] = 1
             self.W_adjust2[i] = temp.view(shape)
-        self.episl = 1e-15
+        self.inf = torch.tensor(1e15)
+
         # self.F = torch.zeros()
     def forward(self, x):
          #x.shape = B, n
@@ -305,16 +306,20 @@ class arrayPC(nn.Module):
         # F[:,:,0]=torch.log(F[:,:,0])
         p_inf = torch.tensor(-float('inf'))
         # p_inf = -10**(10)
-        F += self.episl
+        # F += self.episl
+        
         F = torch.log(F)
+        F = torch.max(F,-self.inf)
         F[F.isinf()]= p_inf
         W = nn.functional.softmax(self.W,dim=2)
         self.W_adjust1=self.W_adjust1.to(device) 
         self.W_adjust2 = self.W_adjust2.to(device)
-        W_full = W * self.W_adjust1 + self.W_adjust2 + self.episl
+        W_full = W * self.W_adjust1 + self.W_adjust2 
+        # + self.episl
         # 
         # W_full = W
-        W_full = torch.log(W_full)   
+
+        W_full = torch.max(torch.log(W_full),-self.inf)
         for i in range(1, self.n):
             W = W_full[i-1]#shape self.k-1, 2
 
@@ -328,14 +333,17 @@ class arrayPC(nn.Module):
             # W = 
             prior = torch.stack([F[:,i-1,:self.k-1].clone(), F[:,i-1,1:].clone()],dim=2) #shape B, self.k-1, 2
             
-            log_x_part = torch.log(x[:,i].unsqueeze(1)+self.episl)
-            log_x_part[log_x_part.isinf()]= p_inf
+            log_x_part = torch.log(x[:,i].unsqueeze(1))
+            # log_x_part[log_x_part.isinf()]= p_inf
+            log_x_part = torch.max(log_x_part,-self.inf)
 
-            log_x_bar_part = torch.log((x[:,i]^True).unsqueeze(1)+self.episl)
+            log_x_bar_part = torch.log((x[:,i]^True).unsqueeze(1))
             log_x_bar_part[log_x_bar_part.isinf()]= p_inf
+            log_x_bar_part = torch.max(log_x_bar_part,-self.inf)
 
-            prior[:,:,0] += log_x_part
-            prior[:,:,1] += log_x_bar_part
+
+            prior[:,:,0] = prior[:,:,0]+ log_x_part
+            prior[:,:,1] = prior[:,:,1]+log_x_bar_part
             F[:,i,1:] = torch.logsumexp(W+prior,dim=2)
             # print(' ')
             # F[:,i,1:] += 
@@ -352,6 +360,7 @@ class arrayPC(nn.Module):
         # out = torch.log(out)
 
         out = torch.max(endW+F[:,-1,:],dim = -1)[0]
+        # out = endW+F[:,-1,:]
 
 
 
