@@ -275,52 +275,37 @@ class arrayPC(nn.Module):
         super().__init__()
         self.n, self.k = data_info['n'],(data_info['k']+1)
 
-        # self.W = nn.Parameter(torch.randn(self.n-1,self.k-1,2), requires_grad=True)
+        self.W = nn.Parameter(torch.randn(self.n-1,self.k-1,2), requires_grad=True)
         self.endW = nn.Parameter(torch.randn(1,self.k), requires_grad=True)
-        # self.W_adjust1 = torch.ones(self.W.shape)
-        # shape = self.W_adjust1[0].shape
-        # self.W_adjust2 = torch.zeros(self.W.shape)
+        self.W_adjust1 = torch.ones(self.W.shape)
+        shape = self.W_adjust1[0].shape
+        self.W_adjust2 = torch.zeros(self.W.shape)
+        for i in range(0, self.k-2):
+            temp = self.W_adjust1[i].view(-1)
+            temp[2+2*i:] = 0
+            self.W_adjust1[i] = temp.view(shape)
+            temp = self.W_adjust2[i].view(-1)
+            temp[2+2*i+1] = 1
+            self.W_adjust2[i] = temp.view(shape)
 
-
-        self.W = []
-
-        for i in range(1, self.n):
-            if i<self.k-1:
-                temp = nn.Parameter(torch.randn(i,2), requires_grad=True)
-                temp2 = torch.zeros(self.k-1-i,2)
-                temp2[0,1] = 1
-                temp = torch.cat([temp,temp2],dim=0)
-                
-            else:
-                temp = nn.Parameter(torch.randn(self.k-1,2), requires_grad=True)
-            
-            self.W.append(temp)
-            # temp[i,1] = 1
-            # idx_1d = 2+2*i+1
-            # print('')
-            # temp[2+2*i:] = 0
-            # self.W_adjust1[i] = temp.view(shape)
-            # temp = self.W_adjust2[i].view(-1)
-            # temp[2+2*i+1] = 1
-            # self.W_adjust2[i] = temp.view(shape)
-        self.W = torch.stack(self.W)
         self.episl = 1e-15
     def forward(self, x):
         device = x.device
-        
-        # W = nn.functional.softmax(self.W,dim=2)
-        for i in range(1,self.k-1):
-            self.W[i-1][:i,:] = nn.functional.softmax(self.W[i-1][:i,:],dim=1)
-        self.W[self.k-2:,:,:] = nn.functional.softmax(self.W[self.k-2:,:,:],dim=2)
+        W = nn.functional.softmax(self.W,dim=2)
         W_append = torch.zeros(self.n-1,1,2)
         W_append[:,:,0] = 1
-        W_append= W_append.to(device)
-        self.W = self.W.to(device)
-        W_full = torch.cat([W_append,self.W],dim = 1)
+
+        self.W_adjust1 = self.W_adjust1.to(device)
+        self.W_adjust2 = self.W_adjust2.to(device)
+        W_append = W_append.to(device)
+
+        W_full = W * self.W_adjust1 + self.W_adjust2
+        W_full = torch.cat([W_append,W_full],dim = 1)
         group_num = torch.clone(x[:,0])
-        out = torch.zeros(x.shape[0],1).to(device)
+        out = torch.zeros(x.shape[0],1)
+        out = out.to(device)
         for i in range(1,self.n):
-            group_num+=x[:,i]
+            group_num = group_num + x[:,i]
             idx = x[:,i]
             selected_group = torch.index_select(W_full[i-1],0,group_num)
             # print('hi')
