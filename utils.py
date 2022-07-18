@@ -26,20 +26,25 @@ def parse_args():
     parser.add_argument('-momentum', default=0.9, type=float, help='momentum for SGD')
     parser.add_argument('-model', type=str, default='LEnsemble', help='specify model name (same as class name in model.py')
     parser.add_argument('-output_folder', type=str, default="", help='log path')
-    parser.add_argument('-output_dir', type=str, default="", help='log path')
+    parser.add_argument('-output_dir', type=str, default="", help='log path') 
     parser.add_argument('-sanity_check', type=str, default='', help='sanity check, e.g 10,3; when this is non empty, data should be sanity_check')
+    
+    parser.add_argument('-EM_cluster_num', type=int, default=0, help='number of clusters; if 0 then no EM cluster')
+    parser.add_argument('-EM_steps', type=int, default=0, help='number of EM steps')
     return parser.parse_args()
 
 def process_opt(opt):
     rand_id='id'+str(randint(0,20))
+    time_stamp = datetime.datetime.now().strftime('%b%d_%H-%M-%S')
+
     if opt.output_folder:
         check_folder=os.path.join("log",opt.output_folder)
         if not os.path.isdir(check_folder):
             os.mkdir(check_folder)
             print('new folder %s created!'%check_folder)
-            
+           
     opt.output_dir= '_' + opt.output_dir if opt.output_dir else opt.output_dir
-    opt.output_dir = datetime.datetime.now().strftime('%b%d_%H-%M-%S')+'_' +rand_id+opt.output_dir
+    opt.output_dir = time_stamp +'_' + rand_id + opt.output_dir
 
     opt.output_dir = os.path.join("log", opt.output_folder, opt.output_dir)
     

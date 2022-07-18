@@ -29,13 +29,17 @@ def avg_ll(model, dataset_loader,device):
     avg_ll = torch.sum(torch.Tensor(lls)).item() / dataset_len
     return avg_ll
 
-def main(opt):
+def import_data(opt):
+
+    return DatasetFromFile(opt.data),DatasetFromFile(opt.data,'valid'),DatasetFromFile(opt.data,'test')
+
+def main(opt, data_pack):
 
 
     device_name="cuda:%d"%opt.cuda if torch.cuda.is_available() else "cpu"
     device = torch.device(device_name)
 
-    train_data, valid_data, test_data= DatasetFromFile(opt.data),DatasetFromFile(opt.data,'valid'),DatasetFromFile(opt.data,'test')
+    train_data, valid_data, test_data= data_pack
     train_dl, valid_dl, test_dl = DataLoader(train_data, batch_size=opt.batch_size),DataLoader(valid_data, batch_size=opt.batch_size),DataLoader(test_data, batch_size=opt.batch_size)
     if "sum" in opt.model:
         model = getattr(models, opt.model)(train_data.info, opt.group_num)
@@ -140,5 +144,6 @@ if __name__=="__main__":
 
         sanity_check_param = [int(i) for i in opt.sanity_check.split(',')]
         sanity_check_gen(sanity_check_param[0],sanity_check_param[1]) #generate sanity check data 
-    main(opt)
+    pack = import_data(opt)
+    main(opt, pack)
     print('done')
