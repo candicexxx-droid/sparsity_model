@@ -307,7 +307,7 @@ class arrayPC(nn.Module):
         for i in range(1,self.n):
             group_num = group_num + x[:,i]
             idx = x[:,i]
-            out += torch.log(W_full[i-1][group_num,idx][:,None])
+            out = out+ torch.log(W_full[i-1][group_num,idx][:,None])
             pass
         endW = nn.functional.softmax(self.endW,dim=1)
         endW = torch.index_select(endW,1,group_num).transpose(1,0)

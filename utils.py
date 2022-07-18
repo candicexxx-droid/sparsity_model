@@ -82,29 +82,32 @@ class DatasetFromFile(Dataset):
     """
     adapted from https://github.com/joshuacnf/Probabilistic-Generating-Circuits/blob/main/pgc/train.py
     """
-    def __init__(self, dataset_name,  mode='train',group_num=1,):
+    def __init__(self, dataset_name,  mode='train',x=None,group_num=1):
         """
         group_num deprecated, do not specify
         """
-        examples = []
-        self.mode = mode
-        #run init under project root
-        filename = 'data/'+dataset_name+'/'+dataset_name+'.'+mode+'.data'
-        with open(filename, 'r') as f:
-            for line in f.readlines():
-                line = line.strip()
-                if line == '':
-                    continue
-                if 'mnist' in dataset_name:
-                    line = [int(x) for x in line.split(' ')]
-                else:
-                    line = [int(x) for x in line.split(',')]
-                examples.append(line)
-        x = torch.tensor(examples,dtype=torch.long)
+        if x is None:
+            examples = []
+            self.mode = mode
+            #run init under project root
+            filename = 'data/'+dataset_name+'/'+dataset_name+'.'+mode+'.data'
+            with open(filename, 'r') as f:
+                for line in f.readlines():
+                    line = line.strip()
+                    if line == '':
+                        continue
+                    if 'mnist' in dataset_name:
+                        line = [int(x) for x in line.split(' ')]
+                    else:
+                        line = [int(x) for x in line.split(',')]
+                    examples.append(line)
+            x = torch.tensor(examples,dtype=torch.long)
+            
+            self.info={}
+            self.info['k'] = int(x.sum(dim=1).max())
+            self.info['n'] = x[0].shape[0]
         self.x = x
-        self.info={}
-        self.info['k'] = int(x.sum(dim=1).max())
-        self.info['n'] = self.x[0].shape[0]
+        
         self.splited = False
         if group_num>1:
             self.split_data_set(group_num)

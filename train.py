@@ -6,7 +6,7 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 import json
 
-def avg_ll(model, dataset_loader,device):
+def avg_ll(model, dataset_loader,device, return_lls=False):
     """
     adapted from https://github.com/joshuacnf/Probabilistic-Generating-Circuits/blob/18700951ad18759e95ca85430da66042931b6c8b/pgc/train.py#L163
     """
@@ -26,6 +26,8 @@ def avg_ll(model, dataset_loader,device):
         #     dataset_len += x_batch[0].shape[0]
         # else:
         dataset_len += x_batch.shape[0]
+    if return_lls:
+        return torch.Tensor(lls),dataset_len
     avg_ll = torch.sum(torch.Tensor(lls)).item() / dataset_len
     return avg_ll
 
@@ -100,7 +102,9 @@ def main(opt, data_pack):
             tb_writer.add_scalar("%s/avg_loss"%"train", avg_loss, epoch)
             # compute likelihood on train, valid and test
             train_ll = -avg_loss
+
             valid_ll = avg_ll(model, valid_dl,device)
+            
             # test_ll = avg_ll(model, test_dl)
 
             tb_writer.add_scalar("%s/avg_ll"%"train", -avg_loss, epoch)
@@ -133,6 +137,7 @@ def main(opt, data_pack):
                 'loss': avg_loss,
                 
                 }, opt.output_dir+"/end_chpt.pt")
+    return model
     
 
 
